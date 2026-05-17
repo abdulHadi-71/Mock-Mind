@@ -1,0 +1,17 @@
+{
+  "name": "ai-mock-interview-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Mock Interview Platform - Full-stack SaaS",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
