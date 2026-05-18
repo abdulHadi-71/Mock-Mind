@@ -109,7 +109,7 @@ npm test
 
 # 👨‍💻 Author
 Developed by Abdul Hadi  
-GitHub: :contentReference[oaicite:0]{index=0}
+GitHub: : https://github.com/abdulHadi-71
 
 #📜 License
 This project is licensed for educational and portfolio purposes.
