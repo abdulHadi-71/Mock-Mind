@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, BarChart3, CheckCircle2, Mic, Sparkles, Shield, Star } from 'lucide-react';
 import { SiteHeader } from '@/components/layout/SiteHeader';
+import { Footer } from '@/components/layout/Footer';
 
 const features = [
   {
@@ -253,29 +254,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <footer className="border-t border-white/10 bg-slate-950/80">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-            <div>
-              <p className="text-sm font-semibold text-white">MockMind</p>
-              <p className="mt-1 text-sm text-slate-400">
-                AI mock interviews with structured feedback, practice history, and focused growth.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-slate-400">
-              <Link href="/about" prefetch={false} className="transition-colors hover:text-white">
-                About
-              </Link>
-              <span className="text-white/20">•</span>
-              <Link href="/register" prefetch={false} className="transition-colors hover:text-white">
-                Get Started
-              </Link>
-              <span className="text-white/20">•</span>
-              <Link href="/login" prefetch={false} className="transition-colors hover:text-white">
-                Sign In
-              </Link>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );

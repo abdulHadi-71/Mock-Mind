@@ -6,7 +6,11 @@ import { getParam } from '../utils/params';
 export const start = asyncHandler(async (req: Request, res: Response) => {
   const result = await interviewEngineService.start({
     userId: req.user!.sub,
-    ...req.body,
+    role: req.body.role,
+    difficulty: req.body.difficulty,
+    type: req.body.type,
+    questionCount: req.body.questionCount,
+    cvText: req.body.cvText,
   });
   res.status(201).json({
     success: true,

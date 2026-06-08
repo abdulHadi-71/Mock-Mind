@@ -106,3 +106,70 @@ Return JSON:
   "skillBreakdown": [{ "skill": "...", "score": 0-100 }]
 }`;
 }
+
+export const CV_QUESTIONS_RESPONSE_SCHEMA = `{
+  "questions": [
+    {
+      "text": "question text",
+      "difficulty": "easy" | "medium" | "hard",
+      "category": "technical" | "behavioral" | "system_design" | "situational"
+    }
+  ]
+}`;
+
+export function buildCvQuestionsPrompt(params: {
+  cvText: string;
+  role: string;
+  difficulty: string;
+  type: string;
+}): string {
+  return `You are a senior professional recruiter and technical interviewer.
+Analyze the candidate's CV provided below and generate a list of exactly 20 interview questions tailored to their background, projects, and skills.
+The questions must align with the target role: "${params.role}" and general level: "${params.difficulty}".
+
+Candidate CV:
+${params.cvText}
+
+You MUST generate exactly 20 questions, distributed as follows:
+- 5 Easy questions (basic concepts and terminology related to the candidate's CV and role)
+- 5 Medium/Normal questions (scenario-based, situational, or common practical problems they've faced in their projects)
+- 5 Hard questions (deep architectural, optimization, system-design or advanced technical aspects of their stack)
+- 5 Problem Solving questions (logical scenarios, algorithmic puzzles, complex troubleshooting, or challenging design problems relevant to their expertise)
+
+For each question, assign a difficulty ('easy', 'medium', 'hard') and a category ('technical', 'behavioral', 'system_design', 'situational').
+
+Please order the 20 questions in the array so that:
+- Questions 1 to 5 are Easy
+- Questions 6 to 10 are Medium
+- Questions 11 to 15 are Hard
+- Questions 16 to 20 are Problem Solving
+
+Return ONLY a valid JSON object matching this schema, without any explanations or markdown formatting:
+${CV_QUESTIONS_RESPONSE_SCHEMA}`;
+}
+
+export function buildEvaluateAnswerPrompt(params: {
+  role: string;
+  difficulty: string;
+  type: string;
+  question: string;
+  answer: string;
+}): string {
+  return `Evaluate the candidate's answer for the following question.
+
+Role: ${params.role}
+Difficulty: ${params.difficulty}
+Type: ${params.type}
+
+Question: ${params.question}
+Candidate's Answer: ${params.answer}
+
+Instructions:
+1. Score the answer (0-100).
+2. Provide constructive feedback, strengths, weaknesses, and suggestions.
+3. Keep the "question" and "nextQuestion" fields empty or put the current question in "question".
+
+Return JSON matching exactly:
+${INTERVIEW_RESPONSE_SCHEMA}`;
+}
+

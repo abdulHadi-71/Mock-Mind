@@ -4,7 +4,8 @@ export type QuestionCategory =
   | 'technical'
   | 'behavioral'
   | 'system_design'
-  | 'situational';
+  | 'situational'
+  | 'problem_solving';
 
 export interface IQuestion extends Document {
   _id: Types.ObjectId;
@@ -31,7 +32,7 @@ const questionSchema = new Schema<IQuestion>(
     text: { type: String, required: true },
     category: {
       type: String,
-      enum: ['technical', 'behavioral', 'system_design', 'situational'],
+      enum: ['technical', 'behavioral', 'system_design', 'situational', 'problem_solving'],
       required: true,
     },
     difficulty: {

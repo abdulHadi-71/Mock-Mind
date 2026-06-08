@@ -30,6 +30,7 @@ export interface StartInterviewInput {
   role: JobRole;
   difficulty: Difficulty;
   type: InterviewType;
+  cvText?: string;
   questionCount?: number;
 }
 
@@ -40,15 +41,18 @@ export interface SubmitAnswerInput {
   durationSeconds?: number;
 }
 
-function randomQuestionCount(): number {
-  return Math.floor(Math.random() * 6) + 10; // 10–15 questions
-}
+const CV_QUESTION_COUNT = 20;
 
 export class InterviewEngineService {
-  /** Creates interview record only — fast response for navigation. */
+  /**
+   * Creates interview record and pre-generates all 20 questions from CV.
+   * If no CV is provided, falls back to the old single-question generation flow.
+   */
   async start(input: StartInterviewInput) {
     const roleLabel = ROLE_LABELS[input.role];
-    const questionCount = input.questionCount ?? randomQuestionCount();
+    const hasCv = !!input.cvText?.trim();
+    const questionCount = hasCv ? CV_QUESTION_COUNT : (input.questionCount ?? 12);
+
     const interview = await Interview.create({
       userId: new Types.ObjectId(input.userId),
       title: `${roleLabel} — ${input.difficulty} ${input.type}`,
@@ -60,13 +64,38 @@ export class InterviewEngineService {
       questionCount,
       currentQuestionIndex: 0,
       status: 'in_progress',
+      cvText: input.cvText ? input.cvText.substring(0, 50000) : undefined,
       startedAt: new Date(),
+      metadata: hasCv ? { cvBased: true } : undefined,
     });
+
+    // If CV is provided, pre-generate all 20 questions now
+    if (hasCv) {
+      const aiQuestions = await aiService.generateQuestionsFromCv({
+        cvText: input.cvText!,
+        role: roleLabel,
+        difficulty: input.difficulty,
+        type: input.type,
+      });
+
+      // Ensure we have at most 20 questions
+      const questionsToCreate = aiQuestions.slice(0, CV_QUESTION_COUNT);
+
+      await Question.insertMany(
+        questionsToCreate.map((q, idx) => ({
+          interviewId: interview._id,
+          order: idx,
+          text: q.text,
+          category: q.category || this.mapTypeToCategory(input.type),
+          difficulty: q.difficulty || 'medium',
+        }))
+      );
+    }
 
     return { interview };
   }
 
-  /** Generates first AI question — call after client navigates to session. */
+  /** Returns first question — if CV-based, simply fetches from DB (fast). */
   async generateFirstQuestion(userId: string, interviewId: string) {
     const interview = await this.getOwnedInterview(userId, interviewId);
     if (interview.status !== 'in_progress') {
@@ -82,6 +111,7 @@ export class InterviewEngineService {
       };
     }
 
+    // Fallback: old flow for non-CV interviews
     const ctx = this.buildContext(interview, []);
     const aiResponse = await aiService.generateFirstQuestion(ctx);
 
@@ -118,17 +148,46 @@ export class InterviewEngineService {
       throw new ApiError(400, 'No active question');
     }
 
-    const existingAnswers = await Answer.find({ interviewId: interview._id }).sort({ createdAt: 1 });
-    const history = await this.buildHistory(questions, existingAnswers);
+    const isCvBased = (interview.metadata as Record<string, unknown>)?.cvBased === true;
 
-    const ctx = this.buildContext(interview, history);
-    const aiResponse = await aiService.evaluateAndGenerateNext({
-      ctx,
-      currentQuestion: currentQuestion.text,
-      currentAnswer: input.answer,
-      questionNumber: currentIndex + 1,
-      maxQuestions: interview.questionCount,
-    });
+    let aiResponse: AIInterviewResponse;
+
+    if (isCvBased) {
+      // CV-based: only evaluate the answer, don't generate the next question
+      const evaluation = await aiService.evaluateAnswer({
+        role: ROLE_LABELS[interview.role] ?? interview.jobRole ?? 'Software Engineer',
+        difficulty: interview.difficulty,
+        type: interview.type,
+        question: currentQuestion.text,
+        answer: input.answer,
+      });
+
+      const nextIndex = currentIndex + 1;
+      const nextQ = nextIndex < questions.length ? questions[nextIndex] : null;
+
+      aiResponse = {
+        question: currentQuestion.text,
+        score: evaluation.score,
+        feedback: evaluation.feedback,
+        strengths: evaluation.strengths,
+        weaknesses: evaluation.weaknesses,
+        suggestions: evaluation.suggestions,
+        nextQuestion: nextQ?.text ?? '',
+      };
+    } else {
+      // Old flow: evaluate + generate next question
+      const existingAnswers = await Answer.find({ interviewId: interview._id }).sort({ createdAt: 1 });
+      const history = await this.buildHistory(questions, existingAnswers);
+
+      const ctx = this.buildContext(interview, history);
+      aiResponse = await aiService.evaluateAndGenerateNext({
+        ctx,
+        currentQuestion: currentQuestion.text,
+        currentAnswer: input.answer,
+        questionNumber: currentIndex + 1,
+        maxQuestions: interview.questionCount,
+      });
+    }
 
     await Answer.findOneAndUpdate(
       {
@@ -146,8 +205,9 @@ export class InterviewEngineService {
       { upsert: true, new: true }
     );
 
-    const isComplete =
-      currentIndex + 1 >= interview.questionCount || !aiResponse.nextQuestion?.trim();
+    const isComplete = isCvBased
+      ? currentIndex + 1 >= interview.questionCount
+      : currentIndex + 1 >= interview.questionCount || !aiResponse.nextQuestion?.trim();
 
     if (isComplete) {
       const result = await this.finalizeInterview(input.userId, interview._id.toString());
@@ -159,28 +219,44 @@ export class InterviewEngineService {
     }
 
     const nextIndex = currentIndex + 1;
-    const nextQuestion = await Question.create({
-      interviewId: interview._id,
-      order: nextIndex,
-      text: aiResponse.nextQuestion,
-      category: this.mapTypeToCategory(interview.type),
-      difficulty:
-        interview.difficulty === 'junior'
-          ? 'easy'
-          : interview.difficulty === 'senior'
-            ? 'hard'
-            : 'medium',
-    });
 
-    interview.currentQuestionIndex = nextIndex;
-    await interview.save();
+    if (isCvBased) {
+      // Questions already exist in DB, just advance the index
+      const nextQuestion = await Question.findOne({ interviewId: interview._id, order: nextIndex });
+      interview.currentQuestionIndex = nextIndex;
+      await interview.save();
 
-    return {
-      aiResponse: this.formatResponse(aiResponse, false),
-      isComplete: false,
-      nextQuestion,
-      interview,
-    };
+      return {
+        aiResponse: this.formatResponse(aiResponse, false),
+        isComplete: false,
+        nextQuestion,
+        interview,
+      };
+    } else {
+      // Old flow: create next question from AI response
+      const nextQuestion = await Question.create({
+        interviewId: interview._id,
+        order: nextIndex,
+        text: aiResponse.nextQuestion,
+        category: this.mapTypeToCategory(interview.type),
+        difficulty:
+          interview.difficulty === 'junior'
+            ? 'easy'
+            : interview.difficulty === 'senior'
+              ? 'hard'
+              : 'medium',
+      });
+
+      interview.currentQuestionIndex = nextIndex;
+      await interview.save();
+
+      return {
+        aiResponse: this.formatResponse(aiResponse, false),
+        isComplete: false,
+        nextQuestion,
+        interview,
+      };
+    }
   }
 
   async getNextQuestion(userId: string, interviewId: string) {

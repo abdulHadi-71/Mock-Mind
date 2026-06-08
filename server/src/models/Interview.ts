@@ -33,6 +33,7 @@ export interface IInterview extends Document {
   questionCount: number;
   currentQuestionIndex: number;
   durationMinutes: number;
+  cvText?: string;
   startedAt?: Date;
   completedAt?: Date;
   metadata?: Record<string, unknown>;
@@ -67,7 +68,7 @@ const interviewSchema = new Schema<IInterview>(
       default: 'mixed',
     },
     finalScore: { type: Number, min: 0, max: 100 },
-    questionCount: { type: Number, default: 5, min: 3, max: 15 },
+    questionCount: { type: Number, default: 5, min: 3, max: 20 },
     currentQuestionIndex: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
@@ -81,6 +82,7 @@ const interviewSchema = new Schema<IInterview>(
       enum: ['junior', 'mid', 'senior', 'lead'],
     },
     durationMinutes: { type: Number, default: 45, min: 15, max: 120 },
+    cvText: { type: String, select: false },
     startedAt: { type: Date },
     completedAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },

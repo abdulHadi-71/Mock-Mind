@@ -40,14 +40,16 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { skipAuth, ...fetchOptions } = options;
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+    const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
+
+    const headers: Record<string, string> = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(fetchOptions.headers as Record<string, string>),
     };
 
     const token = this.getAccessToken();
     if (!skipAuth && token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch(`${getApiUrl()}${endpoint}`, {
@@ -100,9 +102,10 @@ class ApiClient {
   }
 
   post<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? (body as BodyInit) : JSON.stringify(body)) : undefined,
       ...options,
     });
   }

@@ -16,9 +16,21 @@ export interface StartInterviewPayload {
   difficulty: string;
   type: string;
   questionCount?: number;
+  cvFile?: File;
 }
 
 export async function startInterview(payload: StartInterviewPayload) {
+  const formData = new FormData();
+  formData.append('role', payload.role);
+  formData.append('difficulty', payload.difficulty);
+  formData.append('type', payload.type);
+  if (payload.questionCount) {
+    formData.append('questionCount', String(payload.questionCount));
+  }
+  if (payload.cvFile) {
+    formData.append('cv', payload.cvFile);
+  }
+
   return api.post<ApiResponse<{
     interview: {
       _id: string;
@@ -26,7 +38,7 @@ export async function startInterview(payload: StartInterviewPayload) {
       status: string;
       questionCount?: number;
     };
-  }>>('/interview/start', payload);
+  }>>('/interview/start', formData);
 }
 
 export async function generateFirstQuestion(interviewId: string) {
